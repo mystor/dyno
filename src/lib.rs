@@ -1,10 +1,14 @@
-use std::any::TypeId;
+#![no_std]
+use core::any::TypeId;
 
-/// Simple type-based tag values for use in generic code.
-pub mod tag;
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
-/// Tag-based value lookup API for trait objects.
+#[cfg(feature = "alloc")]
+use alloc::boxed::Box;
+
 pub mod provider;
+pub mod tag;
 
 /// An identifier which may be used to tag a specific
 pub trait Tag<'a>: Sized + 'static {
@@ -19,7 +23,7 @@ mod private {
 /// Sealed trait representing a type-erased tagged object.
 pub unsafe trait Tagged<'a>: private::Sealed + 'a {
     /// The `TypeId` of the `Tag` this value was tagged with.
-    fn ident_type_id(&self) -> TypeId;
+    fn tag_id(&self) -> TypeId;
 }
 
 /// Internal wrapper type with the same representation as a known external type.
@@ -37,7 +41,7 @@ unsafe impl<'a, I> Tagged<'a> for TaggedImpl<'a, I>
 where
     I: Tag<'a>,
 {
-    fn ident_type_id(&self) -> TypeId {
+    fn tag_id(&self) -> TypeId {
         TypeId::of::<I>()
     }
 }
@@ -73,10 +77,11 @@ impl<'a> dyn Tagged<'a> {
         unsafe { &mut *(value as *mut I::Type as *mut TaggedImpl<'a, I>) }
     }
 
-    /// Tag a reference to a concrete type with a given `Tag`.
+    /// Tag a Box of a concrete type with a given `Tag`.
     ///
     /// This is like an unsizing coercion, but must be performed explicitly to
     /// specify the specific tag.
+    #[cfg(feature = "alloc")]
     pub fn tag_box<I>(value: Box<I::Type>) -> Box<dyn Tagged<'a>>
     where
         I: Tag<'a>,
@@ -92,7 +97,7 @@ impl<'a> dyn Tagged<'a> {
     where
         I: Tag<'a>,
     {
-        self.ident_type_id() == TypeId::of::<I>()
+        self.tag_id() == TypeId::of::<I>()
     }
 
     /// Returns some reference to the dynamic value if it is tagged with `I`,
@@ -128,6 +133,7 @@ impl<'a> dyn Tagged<'a> {
     }
 
     #[inline]
+    #[cfg(feature = "alloc")]
     pub fn downcast_box<I>(self: Box<Self>) -> Result<Box<I::Type>, Box<Self>>
     where
         I: Tag<'a>,

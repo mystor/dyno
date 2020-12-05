@@ -1,3 +1,8 @@
+//! Tag-based value lookup API for trait objects.
+//!
+//! This provides a similar API to my `object_provider` crate, built on top of
+//! `dyno`
+
 use crate::{Tag, Tagged};
 
 /// An untyped request for a value of a specific type.

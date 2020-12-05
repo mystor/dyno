@@ -3,5 +3,12 @@ name = "dyno"
 version = "0.1.0"
 authors = ["Nika Layzell <nika@thelayzells.com>"]
 edition = "2018"
+description = "Dynamic object typecasting in Rust"
+repository = "https://github.com/mystor/dyno"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["alloc"]
+alloc = []
 
 [dependencies]
