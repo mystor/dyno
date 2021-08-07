@@ -26,3 +26,10 @@ pub struct Value<T: 'static>(PhantomData<T>);
 impl<'a, T: 'static> Tag<'a> for Value<T> {
     type Type = T;
 }
+
+/// Tag combinator to wrap the given tag's value in an `Option<T>`
+pub struct Optional<I>(PhantomData<I>);
+
+impl<'a, I: Tag<'a>> Tag<'a> for Optional<I> {
+    type Type = Option<I::Type>;
+}

@@ -3,35 +3,36 @@
 //! This provides a similar API to my `object_provider` crate, built on top of
 //! `dyno`.
 
-use crate::{Tag, Tagged};
+use crate::tag::Optional;
+use crate::tagged::{TagValue, Tagged};
+use crate::Tag;
 
-/// An untyped request for a value of a specific type.
+/// Implementation detail shared between `Request<'a>` and `ConcreteRequest<'a, I>`.
 ///
-/// This type is generally used as an `&mut Request<'a>` outparameter.
+/// Generally this value is used through the `Request<'a>` type alias as a `&mut
+/// Request<'a>` outparameter, or constructed with the `ConcreteRequest<'a, I>`
+/// type alias.
+#[doc(hidden)]
 #[repr(transparent)]
-pub struct Request<'a> {
-    tagged: dyn Tagged<'a> + 'a,
+pub struct RequestImpl<T: ?Sized> {
+    tagged: T,
 }
 
-impl<'a> Request<'a> {
-    /// Helper for performing transmutes as `Request<'a>` has the same layout as
-    /// `dyn Tagged<'a> + 'a`, just with a different type!
-    ///
-    /// This is just to have our own methods on it, and less of the interface
-    /// exposed on the `provide` implementation.
-    fn wrap_tagged<'b>(t: &'b mut (dyn Tagged<'a> + 'a)) -> &'b mut Self {
-        // Safety: This cast is only used to simplify the public types in the
-        // `Request` API, and is technically unnecessary.
-        unsafe { &mut *(t as *mut (dyn Tagged<'a> + 'a) as *mut Request<'a>) }
-    }
+/// An untyped request for a tagged value of a specific type.
+pub type Request<'a> = RequestImpl<dyn Tagged<'a> + 'a>;
 
+/// A concrete request for a tagged value. Can be coerced to `Request<'a>` to be
+/// passed to provider methods.
+pub type ConcreteRequest<'a, I> = RequestImpl<TagValue<'a, Optional<I>>>;
+
+impl<'a> Request<'a> {
     /// Check if the request is for a value with the given tag `I`. If it is,
     /// returns `true`.
     pub fn is<I>(&self) -> bool
     where
         I: Tag<'a>,
     {
-        self.tagged.is::<ReqTag<I>>()
+        self.tagged.is::<Optional<I>>()
     }
 
     /// Attempts to provide a value with the given `Tag` to the request.
@@ -39,8 +40,8 @@ impl<'a> Request<'a> {
     where
         I: Tag<'a>,
     {
-        if let Some(res @ None) = self.tagged.downcast_mut::<ReqTag<I>>() {
-            *res = Some(value);
+        if let Some(res @ TagValue(None)) = self.tagged.downcast_mut::<Optional<I>>() {
+            res.0 = Some(value);
         }
         self
     }
@@ -51,46 +52,45 @@ impl<'a> Request<'a> {
         I: Tag<'a>,
         F: FnOnce() -> I::Type,
     {
-        if let Some(res @ None) = self.tagged.downcast_mut::<ReqTag<I>>() {
-            *res = Some(f());
+        if let Some(res @ TagValue(None)) = self.tagged.downcast_mut::<Optional<I>>() {
+            res.0 = Some(f());
         }
         self
     }
 }
 
+impl<'a, I> ConcreteRequest<'a, I>
+where
+    I: Tag<'a>,
+{
+    /// Construct a new unfulfilled concrete request for the given type. This
+    /// can be coerced to a `Request<'a>` to pass to a type-erased provider
+    /// method.
+    pub fn new() -> Self {
+        RequestImpl {
+            tagged: TagValue(None),
+        }
+    }
+
+    /// Take any provided value from this concrete request.
+    pub fn take(self) -> Option<I::Type> {
+        self.tagged.0
+    }
+}
+
+/// Trait implemented by a type which can dynamically provide tagged values.
 pub trait Provider {
     fn provide<'a>(&'a self, request: &mut Request<'a>);
 }
 
 impl dyn Provider {
+    /// Request a specific value by a given tag from the `Provider`.
     pub fn request<'a, I>(&'a self) -> Option<I::Type>
     where
         I: Tag<'a>,
     {
-        request::<I, _>(|request| self.provide(request))
+        let mut request = <ConcreteRequest<'a, I>>::new();
+        self.provide(&mut request);
+        request.take()
     }
-}
-
-/// Create a type-erased `Request<'a>` for the given type tag `I`. The closure
-/// argument will be invoked with a reference to this request, which may be
-/// fulfilled dynamically.
-pub fn request<'a, I, F>(f: F) -> Option<<I as Tag<'a>>::Type>
-where
-    I: Tag<'a>,
-    F: FnOnce(&mut Request<'a>),
-{
-    let mut result: Option<<I as Tag<'a>>::Type> = None;
-    f(Request::<'a>::wrap_tagged(
-        <dyn Tagged>::tag_mut::<ReqTag<I>>(&mut result),
-    ));
-    result
-}
-
-/// Implementation detail: Specific `Tag` tag used by the `Request` code under
-/// the hood.
-///
-/// Composition of `Tag` types!
-struct ReqTag<I>(I);
-impl<'a, I: Tag<'a>> Tag<'a> for ReqTag<I> {
-    type Type = Option<I::Type>;
 }
