@@ -13,7 +13,7 @@ impl<'a> Tag<'a> for StatusTag {
 }
 
 fn get_thing<'a>(value: &'a str) -> Box<dyn Tagged<'a> + 'a> {
-    Tagged::tag_box::<StatusTag>(Box::new(Status { value }))
+    <dyn Tagged>::tag_box::<StatusTag>(Box::new(Status { value }))
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn use_object_provider() {
     });
 
     let mut result: Option<&str> = None;
-    my_object_provider.provide(Tagged::tag_mut::<RefRequest<str>>(&mut result));
+    my_object_provider.provide(<dyn Tagged>::tag_mut::<RefRequest<str>>(&mut result));
 
     assert_eq!(result, Some("hello, jane!"));
 }
