@@ -10,9 +10,15 @@ use alloc::boxed::Box;
 pub mod provider;
 pub mod tag;
 
-/// An identifier which may be used to tag a specific
+/// This trait is implemented by specific `Tag` types in order to allow
+/// describing a type which can be requested for a given lifetime `'a`.
+///
+/// A few example implementations for type-driven `Tag`s can be found in the
+/// [`tag`] module, although crates may also implement their own tags for more
+/// complex types with internal lifetimes.
 pub trait Tag<'a>: Sized + 'static {
-    /// The type of values which may be tagged by this `Tag`.
+    /// The type of values which may be tagged by this `Tag` for the given
+    /// lifetime.
     type Type: 'a;
 }
 
@@ -21,12 +27,19 @@ mod private {
 }
 
 /// Sealed trait representing a type-erased tagged object.
+///
+/// Instances of `Tagged<'a>` may be created using the `tag_ref` and related
+/// methods.
 pub unsafe trait Tagged<'a>: private::Sealed + 'a {
     /// The `TypeId` of the `Tag` this value was tagged with.
     fn tag_id(&self) -> TypeId;
 }
 
 /// Internal wrapper type with the same representation as a known external type.
+///
+/// This type exists to encode the specific `Tag` implementation which a value
+/// is associated with into the type, such that when it is type erased into a
+/// `dyn Tagged<'a>`, that information is preserved.
 #[repr(transparent)]
 struct TaggedImpl<'a, I>
 where

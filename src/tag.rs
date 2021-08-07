@@ -1,4 +1,7 @@
 //! Simple type-based tag values for use in generic code.
+//!
+//! Additional tags for complex types, such as `MutexGuard<'a, T>`, may be
+//! implemented by downstream crates with a `Tag<'a>` impl on the tag type.
 
 use crate::Tag;
 use core::marker::PhantomData;
@@ -15,4 +18,11 @@ pub struct RefMut<T: ?Sized + 'static>(PhantomData<T>);
 
 impl<'a, T: ?Sized + 'static> Tag<'a> for RefMut<T> {
     type Type = &'a mut T;
+}
+
+/// Type-based `Tag` for static `T` types.
+pub struct Value<T: 'static>(PhantomData<T>);
+
+impl<'a, T: 'static> Tag<'a> for Value<T> {
+    type Type = T;
 }
